@@ -3,6 +3,7 @@ import json
 from lib.serper_client import SerperClient
 from lib.openai_client import OpenAIClient
 from lib.eval_swarm import EvalSwarm
+from lib.scraper_client import ScraperClient
 
 class ResearchTools:
     # Schema definitions as class variables
@@ -75,10 +76,26 @@ class ResearchTools:
         }
     }
 
+    SCRAPE_URL_SCHEMA = {
+        "name": "scrape_url",
+        "description": "Scrapes and cleans content from a given URL, returning the main content and metadata",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "The URL to scrape and extract content from"
+                }
+            },
+            "required": ["url"]
+        }
+    }
+
     def __init__(self, openai_api_key, serper_api_key):
         """Initialize the research tools with API clients."""
         self._llm = OpenAIClient(api_key=openai_api_key)
         self._serper = SerperClient(api_key=serper_api_key)
+        self._scraper = ScraperClient()
         self.swarm = EvalSwarm(self._llm, self._serper, max_workers=50)
 
     @property
@@ -91,25 +108,32 @@ class ResearchTools:
         """Access the Serper client for cost tracking."""
         return self._serper
 
+    @property
+    def scraper(self):
+        """Access the scraper client."""
+        return self._scraper
+
     def get_schemas_and_functions(self):
         """Returns a tuple of (schemas, functions) where schemas is a list of schema definitions
         and functions is a list of corresponding function references bound to this instance."""
         schemas = [
             self.PARALLEL_WEBSEARCH_SCHEMA,
             # self.COMPANY_WEBSEARCH_SCHEMA,
-            self.SWARM_RESEARCH_SCHEMA
+            self.SWARM_RESEARCH_SCHEMA,
+            self.SCRAPE_URL_SCHEMA
         ]
         
         functions = [
             self.parallel_websearch,
             # self.company_websearch,
-            self.swarm_research
+            self.swarm_research,
+            self.scrape_url
         ]
         return schemas, functions
 
     async def _parallel_websearch_async(self, searches):
         """Internal async method for parallel web search."""
-        return await self._serper.search_async_batch(searches)
+        return await self._serper.search_async_batch(searches, include_urls=True)
 
     async def _parallel_llm_async(self, messages):
         """Internal async method for parallel LLM calls."""
@@ -141,3 +165,10 @@ class ResearchTools:
             if result["final_score"] > 50:
                 string_result += json.dumps(result) + "\n"
         return string_result
+
+    def scrape_url(self, query):
+        """Scrape and clean content from a given URL."""
+        result = self._scraper.scrape_url(query['url'])
+        if "error" in result and result["error"]:
+            return json.dumps({"error": result["error"]})
+        return json.dumps(result, indent=2)

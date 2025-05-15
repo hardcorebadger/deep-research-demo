@@ -14,7 +14,7 @@ class SerperClient:
         }
         self.searches = 0
 
-    def search(self, query: str, limit: int = 5) -> str:
+    def search(self, query: str, limit: int = 5, include_urls: bool = False) -> str:
         response = requests.get(f"https://google.serper.dev/search?q={query}", headers=self.headers)
         self.searches += 1
         if response.status_code != 200:
@@ -24,10 +24,13 @@ class SerperClient:
         if "organic" in result:
             for result in result["organic"][:limit]:  # Use top 10 results
                 search_context += f"Title: {result.get('title', '')}\n"
-                search_context += f"Snippet: {result.get('snippet', '')}\n\n"
+                search_context += f"Snippet: {result.get('snippet', '')}\n"
+                if include_urls:
+                    search_context += f"URL: {result.get('link', '')}\n"
+                search_context += "\n"
         return search_context
     
-    async def search_async(self, query: str, limit: int = 5) -> str:
+    async def search_async(self, query: str, limit: int = 5, include_urls: bool = False) -> str:
         async with aiohttp.ClientSession() as session:
             self.searches += 1
             async with session.post(
@@ -46,12 +49,15 @@ class SerperClient:
                 if "organic" in result:
                     for result in result["organic"][:limit]:  # Use top 10 results
                         search_context += f"Title: {result.get('title', '')}\n"
-                        search_context += f"Snippet: {result.get('snippet', '')}\n\n"
+                        search_context += f"Snippet: {result.get('snippet', '')}\n"
+                        if include_urls:
+                            search_context += f"URL: {result.get('link', '')}\n"
+                        search_context += "\n"
                 
                 return search_context
     
-    async def search_async_batch(self, queries: list[str], limit: int = 5) -> list[str]:
-        tasks = [self.search_async(query, limit) for query in queries]
+    async def search_async_batch(self, queries: list[str], limit: int = 5, include_urls: bool = False) -> list[str]:
+        tasks = [self.search_async(query, limit, include_urls) for query in queries]
         results = await asyncio.gather(*tasks)
         paired = list(zip(queries, results))
         formatted = [f"Query: {query}\n\n{result}" for query, result in paired]
